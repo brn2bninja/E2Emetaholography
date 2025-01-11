@@ -1,9 +1,11 @@
 ./slurm_logs/*
-./wandb/*
-.wandb/*
+./wandb/
+.wandb/
+.test_result/
 .log_single*
 .logsweep*
 ./project_logs/*
 ./fwdnet/nk_data/*
 .vscode/*
+.fwdnet/Metacell_storage/
 *.out
