@@ -1,0 +1,9 @@
+./slurm_logs/*
+./wandb/*
+.wandb/*
+.log_single*
+.logsweep*
+./project_logs/*
+./fwdnet/nk_data/*
+.vscode/*
+*.out
