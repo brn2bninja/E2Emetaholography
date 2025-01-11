@@ -1,11 +1,36 @@
-./slurm_logs/*
-./wandb/
-.wandb/
+project_logs/*
+./fwdnet/nk_data/*
+.vscode/
+Figure_Materials/
+gsalgorithm_results/
+source_image/
+
+# fwdnet
+fwdnet/Metacell_storage/
+fwdnet/nk_data/
+fwdnet/
+
+# pyc files
+__pycache__/
+
+# log files
+wandb/
+slurm_logs/*
 .test_result/
 .log_single*
 .logsweep*
-./project_logs/*
-./fwdnet/nk_data/*
-.vscode/*
-.fwdnet/Metacell_storage/
 *.out
+*.csv
+
+# Ver2 files
+test_result/
+ver2_param_norm/test_norm_0108_1411_result
+ver2_param_norm/test_norm_0108_1556_result
+ver2_param_norm/test_norm_0108_1703_result
+ver2_param_norm/test_norm_0108_1907_result
+ver2_param_norm/test_norm_0108_1918_result
+ver2_param_norm/test_norm_0108_2030_result
+ver2_param_norm/test_norm_0108_2153_result/
+ver2_param_norm/test_norm_0109_0958_result/
+ver2_param_norm/wandb/
+ver2_param_norm/
