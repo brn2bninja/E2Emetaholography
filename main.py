@@ -49,6 +49,7 @@ def optimize(args) -> None:
                                        ], betas=(0.8, 0.9))
     
     scheduler_mhp = torch.optim.lr_scheduler.LambdaLR(Optimizer_mhp, lr_lambda = lambda epoch: 0.98 ** epoch)
+    # scheduler_mhp = torch.optim.lr_scheduler.LambdaLR(Optimizer_mhp, lr_lambda = lambda epoch: 0.995 ** epoch)
     
     # Set loss function
     hloss_function = loss.loss_functions(params)
@@ -60,7 +61,7 @@ def optimize(args) -> None:
         metasurface_mask = conv.define_metasurface(tm_2d, tp_2d, rot_2d)
         I = conv.compute_hologram(metasurface_mask)
         _, loss_components = hloss_function(I, tm_2d)
-        
+    
     for step in tqdm(range(total_step)):
         # Logging
         if step % step_term == 0:
@@ -78,6 +79,7 @@ def optimize(args) -> None:
             if iswandb:
                 wandb_log = {}
                 I_for_wandb = I.detach().cpu().clone()
+                I_for_wandb = I_for_wandb / torch.max(torch.max(I_for_wandb, dim=0, keepdims=True)[0], dim=1, keepdims=True)[0]
                 # Exclude the center pixels
                 num = I.shape[1] 
                 idx_center = [i for i in range(num) if (abs(i-num//2) < 2)]
@@ -87,22 +89,30 @@ def optimize(args) -> None:
                 I_B[:, :, 2] = np.array(I_norm[:, :, 0]); I_G[:, :, 1] = np.array(I_norm[:,:,1]); I_R[:, :, 0] = np.array(I_norm[:,:,2])                    
                 I_total = np.array(I_norm)
                 for i in range(3):
-                    I_total[:, :, i] = 255 * I_total[:, :, i] / np.max(I_total[:, :, i])
+                    I_total[:, :, i] = 255 * I_total[:, :, 2-i] / np.max(I_total[:, :, 2-i])
                 wandb_log[f'Material'] = torch.argmax(Mat_var.clone().detach()).item()
                 wandb_log[f'H'] = log_H.item()
                 wandb_log[f'P'] = log_P.item()
                 wandb_log[f'L_{wdb_idx}'] = log_LW[wdb_idx, 0].item()
                 wandb_log[f'W_{wdb_idx}'] = log_LW[wdb_idx, 1].item()
                 wandb_log[f'NumP_{wdb_idx}'] = log_numP[wdb_idx].item()
-                wandb_log[f'Rot_{wdb_idx}'] = log_rot[wdb_idx].item()
+                wandb_log[f'Rot_{wdb_idx}'] = log_rot[wdb_idx].item()     
                 wandb_log[f'Image_R'] = wandb.Image(I_R)
                 wandb_log[f'Image_G'] = wandb.Image(I_G)
                 wandb_log[f'Image_B'] = wandb.Image(I_B)
                 wandb_log[f'Image_total'] = wandb.Image(I_total)
-
+                wandb_log[f'TM_B '] = torch.mean(tm_2d[:, :, 0]).item()
+                wandb_log[f'TM_G '] = torch.mean(tm_2d[:, :, 1]).item()
+                wandb_log[f'TM_R '] = torch.mean(tm_2d[:, :, 2]).item()
+                # wandb_log[f'ratio_ROI_B'] = torch.sum(I_for_wandb[270:720, 500:-500, 0]) / torch.sum(I_for_wandb[:, :, 0])
+                # wandb_log[f'ratio_ROI_G'] = torch.sum(I_for_wandb[270:720, 500:-500, 1]) / torch.sum(I_for_wandb[:, :, 1])
+                # wandb_log[f'ratio_ROI_R'] = torch.sum(I_for_wandb[270:720, 500:-500, 2]) / torch.sum(I_for_wandb[:, :, 2])
+                wandb_log[f'ratio_ROI_B'] = torch.sum(I_for_wandb[180:480, 340:-340, 0]) / torch.sum(I_for_wandb[:, :, 0])
+                wandb_log[f'ratio_ROI_G'] = torch.sum(I_for_wandb[180:480, 340:-340, 1]) / torch.sum(I_for_wandb[:, :, 1])
+                wandb_log[f'ratio_ROI_R'] = torch.sum(I_for_wandb[180:480, 340:-340, 2]) / torch.sum(I_for_wandb[:, :, 2])
                 wandb_log_loss = {f'{key}_loss': val for [key, val] in loss_components.items()}
                 wandb_log_loss['Total_loss'] = sum(loss_components.values())
-                wandb_log = dict(wandb_log, **wandb_log_loss)
+                wandb_log = dict(wandb_log, **wandb_log_loss) 
                 wandb.log(wandb_log)
     
             if (not params['sweep']) or not('sweep' in params.keys()):
@@ -158,6 +168,7 @@ def optimize(args) -> None:
             I = conv.compute_hologram(metasurface_mask)
             loss_lwnr, loss_components = hloss_function(I, tm_2d)
             loss_lwnr.backward()
+            torch.nn.utils.clip_grad_norm_([LW_var, NumP_var, Rot_var], max_norm=1.0)
             Optimizer_lwnr.step() 
             hook_lw.remove()
             hook_numP.remove()

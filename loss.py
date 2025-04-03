@@ -26,7 +26,8 @@ def CT_loss(I, params):
 def Norm_loss(I, params):
     metric = torch.nn.MSELoss()
     normloss = 0.0
-    I_tar = params['target_images']
+    I_tar = params['target_images'][270:720, 500:-500, :]
+    # I_tar = params['target_images']
     color_weights = params['color_weights']
     sum_batch_weight = sum(color_weights)
     for i in range(3):
@@ -36,6 +37,7 @@ def Norm_loss(I, params):
         avg_I = torch.mean(I_i)
         norm_I_i = avg_target_i * I_i / avg_I
         normloss += params['norm_weight'] * (color_weights[i] / sum_batch_weight) * metric(norm_I_i, target_i)
+        # normloss += params['norm_weight'] * (color_weights[i] / sum_batch_weight) * metric(I_i, target_i)
     return normloss
 
 
@@ -74,7 +76,8 @@ def Edge_loss(I, params):
         return dx, dy
     
     edge_loss = 0.0
-    target_img = params['target_images']
+    target_img = params['target_images'][270:720, 500:-500, :]
+    # target_img = params['target_images']
     for i, weight in enumerate(params['color_weights']):           
         dx, dy = sobel_filter(I[:, :, i:i+1].squeeze(-1))
         target_dx, target_dy = sobel_filter(target_img[:,:,i])
@@ -84,8 +87,9 @@ def Edge_loss(I, params):
 # Spatial gradient loss
 from pytorch_msssim import ssim
 def SSIM_loss(I, params):
-    target_img = params['target_images']
-    s_loss = 1 - ssim(I.permute(0, 1, 2).unsqueeze(0), target_img.permute(0, 1, 2).unsqueeze(0))
+    target_img = params['target_images'][270:720, 500:-500, :]
+    # target_img = params['target_images']
+    s_loss = 1 - ssim(I.permute(0, 1, 2).unsqueeze(0), target_img.permute(0, 1, 2).unsqueeze(0), data_range=1.0)
     return params['ssim_weight'] * s_loss
 
 
@@ -94,32 +98,34 @@ def Eff_loss(tm_2d, params):
     color_weights = params['color_weights']
     sum_color_weight = sum(color_weights)
     for i in range(3):
-        mean_tm_i = torch.mean(tm_2d[:,:,i])
-        eff_loss += params['eff_weight'] * (color_weights[i] / sum_color_weight) * (1 - mean_tm_i)
+        tm_i = torch.mean(tm_2d[:,:,i])
+        eff_loss += params['eff_weight'] * (color_weights[i] / sum_color_weight) * (1 - tm_i)
     return eff_loss
 
 
 def loss_functions(params):
     def hologram_loss_function(I, tm_2d):
         loss_components = {}
+        I_crop = I[270:720, 500:-500]
+        # I_crop = I[180:480, 340:-340]
         # Compute losses
         if ('norm_weight' in params.keys()) and (params['norm_weight'] != 0):
-            Norm_loss_value = Norm_loss(I, params)
+            Norm_loss_value = Norm_loss(I_crop, params)
             loss_components['norm'] = Norm_loss_value
         if ('ct_weight' in params.keys()) and (params['ct_weight'] != [0, 0]):
             CT_loss_value1, CT_loss_value2 = CT_loss(I, params)
             loss_components['ct1'] = CT_loss_value1; loss_components['ct2'] = CT_loss_value2
         if ('p_weight' in params.keys()) and (params['p_weight'] != 0):
-            P_loss_value = P_loss(I, params)
+            P_loss_value = P_loss(I_crop, params)
             loss_components['p'] = P_loss_value
         if ('ssim_weight' in params.keys()) and (params['ssim_weight'] != 0):
-            Spatial_loss_value = SSIM_loss(I, params)
+            Spatial_loss_value = SSIM_loss(I_crop, params)
             loss_components['ssim'] = Spatial_loss_value
         if ('eff_weight' in params.keys()) and (params['eff_weight'] != 0):
             Eff_loss_value = Eff_loss(tm_2d, params)
             loss_components['eff'] = Eff_loss_value
         if ('edge_weight' in params.keys()) and (params['edge_weight'] != 0):
-            Edge_loss_value = Edge_loss(I, params)
+            Edge_loss_value = Edge_loss(I_crop, params)
             loss_components['edge'] = Edge_loss_value        
         total_loss = sum(loss_components.values())
 

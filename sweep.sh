@@ -5,7 +5,7 @@
 #SBATCH -o slurm_logs/sweep_%j.out
 #SBATCH -t 48:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --nodelist=node35
+#SBATCH --nodelist=node31
 #SBATCH --mem=12gb
 #SBATCH --cpus-per-gpu=12
 

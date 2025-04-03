@@ -4,7 +4,7 @@ import os
 import math
 from fwdnet.jbnet import *
 import cv2
-from lens_distort import lensdistort
+from utils.lens_distort import lensdistort
 
 def initialize_params(args):
     params = dict(**args)
@@ -30,6 +30,55 @@ def initialize_params(args):
     
     return params
 
+
+# # Scaling & Distortion
+# def gen_target_images(params) -> None:
+#     img_dir = '/home/linkle115/vscode_server/EEasih/source_image/'
+#     type_img = params['target_img']
+#     original_img = [type_img + '_' + c + '.png' for c in ['Blue', 'Green', 'Red']]
+#     wl = params['wl']
+#     wl_standard = min(wl)
+#     I = np.zeros([params['num_meta'], params['num_meta']], 3)
+#     for i in range(3):
+#         wl_i = wl[i]
+#         f_img = original_img[i]
+#         I_source = cv2.imread(img_dir + f_img, cv2.IMREAD_GRAYSCALE)
+        
+#         # Scaling
+#         size1 = int(params('num_meta') * wl_standard / wl_i)
+#         I_source = cv2.resize(I, (size1, size1))
+#         I_source = I_source / np.max(I)
+#         # Bilateral symmetric conversion
+#         # In most cases, light is incident from substrate to metasurface, so we need this conversion. If not, ignore this.
+#         I_source = I_source[:, ::-1]
+#         p = params['pitch']
+#         def idxtocartesian(idx, pitch, nn): return pitch * (1/2 + idx - nn/2)
+#         def cartesiantoidx(x, pitch, nn): return int(nn/2 + x/pitch - 1/2)
+#         def distort(idx0, idx1, lam, pitch, D):
+#             x = idxtocartesian(idx1, pitch, params['num_meta'])
+#             y = idxtocartesian(idx0, pitch, params['num_meta'])
+#             x_ = x / math.sqrt(1 + (x**2 + y**2) * (lam / (D * pitch))**2)
+#             y_ = y / math.sqrt(1 + (x**2 + y**2) * (lam / (D * pitch))**2)
+#             idx0_ = cartesiantoidx(y_, pitch, params['num_meta'])
+#             idx1_ = cartesiantoidx(x_, pitch, params['num_meta'])
+#             return idx0_, idx1_
+            
+#         # Distortion correction
+#         for idx1 in range(size1):
+#             for idx2 in range(size1):
+#                 idx1_new, idx2_new = distort(idx1, idx2, wl_i, wl_standard, 1)
+#                 I[idx1_new, idx2_new, i] = I_source[idx1, idx2]
+    
+#     target_img = torch.from_numpy(I).to(device=params['device'], dtype=torch.float32)
+#     crit = 0.3
+#     list_mask = []
+#     list_reverse_mask = []
+#     for i in range(3):
+#         list_mask.append(torch.where(target_img[:, :, i] > crit, 1.0, 0))
+#         prev_idx = (i - 1) % 3
+#         next_idx = (i + 1) % 3
+#         list_reverse_mask.append(torch.where((target_img[:, :, i] < crit) & ((target_img[:, :, prev_idx] > crit) | (target_img[:, :, next_idx] > crit)), 1.0, 0))
+#     return target_img, list_mask, list_reverse_mask
 
 def gen_target_images(params) -> None:
     img_dir = '/home/linkle115/vscode_server/EEasih/source_image/'
@@ -125,7 +174,7 @@ def init_mat_geom(params):
     rot_var  = np.random.rand(num_X * num_Y, 6)
     if params['init'] == 'random':
         mat_var = np.random.rand(len(params['nk_f_list']))
-        h_var = np.random.randint(70, 90+1, [1,]) * 10
+        h_var = np.random.randint(60, 90+1, [1,]) * 10
         p_var = np.random.randint(38, 40+1, [1,]) * 10
         w_arr = np.zeros([num_X * num_Y]); l_arr = np.zeros([num_X * num_Y])
         numP = np.argmax(numP_var, axis=-1, keepdims=True) + 1
@@ -363,7 +412,7 @@ def var_clamp(var, params, **kwargs):
             # H, P
             h_unnorm = norm_or_restore(data_dir, h.clone().detach(), mode='restore', type='h')
             p_unnorm = norm_or_restore(data_dir, p.clone().detach(), mode='restore', type='p')
-            h_unnorm.clamp_(700, 900); p_unnorm.clamp_(380, 400)
+            h_unnorm.clamp_(600, 900); p_unnorm.clamp_(380, 400)
             h_norm = norm_or_restore(data_dir, h_unnorm, mode='normalize', type='h', device=params['device'])
             p_norm = norm_or_restore(data_dir, p_unnorm, mode='normalize', type='p', device=params['device'])
             h.data = h_norm; p.data = p_norm
@@ -383,18 +432,31 @@ def var_clamp(var, params, **kwargs):
             idx_3_num = torch.where(num == 3)[0]
             h_unnorm = norm_or_restore(data_dir, h.clone().detach(), mode='restore', type='h')
             h_per_ar = h_unnorm / params['ar_lim']
+            p_unnorm = norm_or_restore(data_dir, p.clone().detach(), mode='restore', type='p')
             ## W
-            w_min = torch.ones_like(num) * norm_or_restore(data_dir, h_per_ar,  mode='normalize', type='w')
+            w_min = torch.ones_like(num) * norm_or_restore(data_dir, h_per_ar.clone(),  mode='normalize', type='w')
             w_max = 1.0 * torch.zeros_like(num)
-            w_max[idx_1_num] = norm_or_restore(data_dir, torch.tensor([270.0], device=params['device']), mode='normalize', type='w')
-            w_max[idx_2_num] = norm_or_restore(data_dir, torch.tensor([170.0], device=params['device']), mode='normalize', type='w')
-            w_max[idx_3_num] = norm_or_restore(data_dir, torch.tensor([90.0], device=params['device']),  mode='normalize', type='w')
+            # w_max[idx_1_num] = norm_or_restore(data_dir, torch.tensor([260.1], device=params['device']), mode='normalize', type='w')
+            # w_max[idx_2_num] = norm_or_restore(data_dir, torch.tensor([150.1], device=params['device']), mode='normalize', type='w')
+            # w_max[idx_3_num] = norm_or_restore(data_dir, torch.tensor([80.1], device=params['device']),  mode='normalize', type='w')
+            w_max[idx_1_num] = norm_or_restore(data_dir, torch.tensor([p_unnorm / math.sqrt(2) - 10.0], device=params['device']), mode='normalize', type='w')
+            # w_max[idx_1_num] = norm_or_restore(data_dir, torch.tensor([p_unnorm / torch.sqrt(2) - 10.0], device=params['device']), mode='normalize', type='w')
+            w_max[idx_2_num] = norm_or_restore(data_dir, torch.tensor([(p_unnorm - 100) / 2 + 0.1], device=params['device']), mode='normalize', type='w')
+            w_max[idx_3_num] = norm_or_restore(data_dir, torch.tensor([(p_unnorm - 150) / 3 + 0.1], device=params['device']),  mode='normalize', type='w')
             lw[:, 1].clamp_(min=w_min, max=w_max)                        
             
             ## L 
-            l_min = torch.ones_like(num) * norm_or_restore(data_dir, h_per_ar,  mode='normalize', type='l')
-            l_min[idx_1_num] = lw[idx_1_num, 0]
-            l_max = torch.ones_like(num) * norm_or_restore(data_dir, torch.tensor([300.0], device=params['device']), mode='normalize', type='l')
+            # l_min = torch.ones_like(num) * norm_or_restore(data_dir, h_per_ar,  mode='normalize', type='l')
+            # l_min[idx_1_num] = lw[idx_1_num, 1]
+            # l_max = torch.ones_like(num) * norm_or_restore(data_dir, torch.tensor([300.0], device=params['device']), mode='normalize', type='l')
+            # lw[:, 0].clamp_(min=l_min, max=l_max)
+            l_min = torch.ones_like(num) * norm_or_restore(data_dir, h_per_ar.clone(),  mode='normalize', type='l')
+            w_unnorm = norm_or_restore(data_dir, lw[:, 1].clone().detach(), mode='restore', device=params['device'], type='w')
+            l_min[idx_1_num] = norm_or_restore(data_dir, w_unnorm[idx_1_num].clone() + 10.0, mode='restore', device=params['device'], type='l')
+            l_max = 1.0 * torch.ones_like(num)
+            l_max[idx_1_num] = norm_or_restore(data_dir, torch.sqrt((p_unnorm - 25)**2 - w_unnorm[idx_1_num] ** 2), mode='normalize', type='l')
+            l_max[idx_2_num] = norm_or_restore(data_dir, torch.sqrt((p_unnorm - 25)**2 - (2 * w_unnorm[idx_2_num] + 50.0) ** 2), device=params['device'], mode='normalize', type='l')
+            l_max[idx_3_num] = norm_or_restore(data_dir, torch.sqrt((p_unnorm - 25)**2 - (3 * w_unnorm[idx_3_num] + 100.0) ** 2), device=params['device'],  mode='normalize', type='l')
             lw[:, 0].clamp_(min=l_min, max=l_max)
             
             # ######################################################################
